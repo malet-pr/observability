@@ -1,0 +1,123 @@
+version: "3.9"
+
+networks:
+  grafana:
+    driver: bridge
+  kafka:
+    driver: bridge
+
+volumes:
+  app_data: {}
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.49.0
+    volumes:
+      - ./prometheus/:/etc/prometheus/
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yaml"
+      - "--storage.tsdb.path=/prometheus"
+    ports:
+      - 9090:9090
+    networks:
+      - grafana
+
+  loki:
+    image: grafana/loki:2.9.0
+    ports:
+      - 3100:3100
+    networks:
+      - grafana
+
+  promtail:
+    image: grafana/promtail:2.0.0
+    volumes:
+      - app_data:/var/log
+    networks:
+      - grafana
+
+  grafana:
+    image: grafana/grafana:11.0.0
+    ports:
+      - 3000:3000
+    networks:
+      - grafana
+    environment:
+      - "GF_DEFAULT_APP_MODE=development"
+      - "GF_LOG_LEVEL=debug"
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin # grants admin role to anonymous access
+      - GF_AUTH_ANONYMOUS_ENABLED=true # removes login 1/2
+      - GF_AUTH_BASIC_ENABLED=false # removes login 2/2
+      - GF_FEATURE_TOGGLES_ENABLE=alertingSimplifiedRouting
+    volumes:
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+
+  db:
+    image: grafana/tns-db:latest
+    ports:
+      - 8082:80
+    networks:
+      - grafana
+
+  kafka:
+    image: 'bitnami/kafka:3.3.1'
+    hostname: kafka
+    container_name: kafka
+    volumes:
+      - ./kafka-cluster/kafka/data:/var/lib/kafka/data
+    user: root
+    ports:
+    - '9092:9092'
+    networks:
+      - kafka
+    environment:
+      - KAFKA_ENABLE_KRAFT=yes
+      - KAFKA_CFG_PROCESS_ROLES=broker,controller
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - KAFKA_BROKER_ID=1
+      - KAFKA_KRAFT_CLUSTER_ID=LelM2dIFQkiUFvXCEcqRWA
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
+      - ALLOW_PLAINTEXT_LISTENER=yes
+
+  wo:
+    image: maletq/work-order:latest
+    container_name: wo-service
+    build:
+      context: ../work-order/
+      dockerfile: Dockerfile
+    ports:
+      - "8091:8091"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - DB_HOST=host.docker.internal  
+      - DB_PORT=5432  
+      - DB_USER=drools
+      - DB_PASSWORD=drools
+      - DB_NAME=drools
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+    depends_on:
+      - kafka
+    networks:
+      - grafana
+      - kafka
+
+  sim:
+    image: maletq/simulator:latest
+    container_name: simulator
+    build:
+      context: ../simulator/
+      dockerfile: Dockerfile
+    ports:
+      - "8092:8092"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+    depends_on:
+      - kafka
+    networks:
+      - grafana
+      - kafka
+

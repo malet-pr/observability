@@ -1,0 +1,24 @@
+server:
+  http_listen_port: 3100
+
+# Schema configuration
+schema_config:
+  configs:
+    - from: 2024-10-06
+      store: boltdb-shipper
+      object_store: filesystem
+      schema: v11
+      index:
+        period: 24h  
+
+# Storage configuration
+storage_config:
+  boltdb_shipper:  
+    active_index_directory: /loki/index
+    shared_store: filesystem
+
+# Ingester configuration
+ingester:
+  wal:
+    enabled: true
+    dir: /loki/wal
