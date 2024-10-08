@@ -10,8 +10,13 @@ scrape_configs:
     static_configs:
       - targets: ["wo-service:8091"]
         labels:
-          instance: woservice
-    # Override global settings
+          instance: wo-service
     scrape_interval: 5s
 
+  - job_name: "simulator"
+    static_configs:
+      - targets: ["simulator:8092"]
+        labels:
+          instance: simulator
+    scrape_interval: 5s
 
